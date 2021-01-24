@@ -1,4 +1,6 @@
-from ..base import ATModem, Command, ExtendedCommand
+from ..base.modem import ATModem
+from ..base.command import Command, ExtendedCommand
+from ..base.pdu import encodeSmsSubmitPdu, encodeGsm7
 from .response_mapper import ResponseMapper
 from .sms import SMS
 from .constants import STATUS_MAP, DELETE_FLAG
@@ -37,6 +39,18 @@ class Modem(ATModem):
     async def read_message(self, index: int) -> Type[SMS]:
         command = ExtendedCommand(b'AT+CMGR', b'OK').write(str(index).encode())
         responses = await self.send_command(command)
+
+    async def send_message(self, to_number: str, text: str):
+        pdus = encodeSmsSubmitPdu(to_number, text)
+        responses = []
+        for pdu in pdus:
+            length = str(pdu[1]).encode()
+            command = ExtendedCommand(b'AT+CMGS', b'AT+CMGS='+length, response_seperator=b'\r\n> ') \
+                .write(length)
+            await self.send_command(command)
+            command = ExtendedCommand(pdu[0].hex().upper().encode(), b'OK').execute()
+            responses += await self.send_command(command, terminator=chr(26).encode(), timeout=60)
+        return responses
 
     async def list_messages(self, status: str = 'ALL') -> List[SMS]:
         assert status in STATUS_MAP, \

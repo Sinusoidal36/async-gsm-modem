@@ -49,7 +49,7 @@ class ATModem:
     async def unsolicited_response_handler(self, response: Type[Response]) -> None:
         pass
 
-    async def read_loop(self) -> None:
+    async def read_loop(self):
         try:
             while self.unsolicited_response_buffer:
                 response = unsolicited_response_buffer.pop()
@@ -64,10 +64,10 @@ class ATModem:
         finally:
             return
 
-    def start_read_loop(self) -> None:
+    def start_read_loop(self):
         self.read_loop_task = asyncio.create_task(self.read_loop())
 
-    async def stop_read_loop(self) -> None:
+    async def stop_read_loop(self):
         if self.read_loop_task:
             self.read_loop_task.cancel()
             try:
@@ -75,40 +75,44 @@ class ATModem:
             except asyncio.CancelledError:
                 return
     
-    async def read_response(self) -> Response:
+    async def read_response(self, seperator: bytes = None) -> Response:
+        seperator = seperator if seperator else self.RESP_SEPERATOR
         try:
-            response = await self.reader.readuntil(self.RESP_SEPERATOR)
-            response = response.rstrip(self.RESP_SEPERATOR)
+            response = await self.reader.readuntil(seperator)
+            response = response.rstrip(seperator)
             response = self.response_mapper.map(response)
             self.logger.debug(response)
             return response
         except IncompleteReadError:
-            pass
+            return
             #self.logger.warning('Read was interrupted')
 
-    async def send_command(self, command: Type[Command], timeout: float = 5) -> List[Response]:
+    async def send_command(self, command: Type[Command], terminator: bytes = None, timeout: float = 5) -> List[Response]:
+        terminator = terminator if terminator else self.CMD_TERMINATOR
+        
         await self.stop_read_loop()
         
         await self.lock.acquire()
-        self.writer.write(command.command + self.CMD_TERMINATOR)
+        self.writer.write(command.command + terminator)
         await self.writer.drain()
         self.logger.debug(command)
         responses = []
-        while True:
-            try:
-                response = await asyncio.wait_for(self.read_response(), timeout)
-                if isinstance(response, UnsolicitedResponse):
-                    self.unsolicited_response_buffer.appendleft(response)
-                elif response.response == command.response_terminator:
-                    break
-                else:
-                    responses.append(response)
-            except asyncio.TimeoutError:
-                self.logger.error(f'{command} timed out')
-                break
+        if command.wait_for_response:
+            while True:
+                try:
+                    response = await asyncio.wait_for(self.read_response(seperator=command.response_seperator), timeout)
+                    if isinstance(response, UnsolicitedResponse):
+                        self.unsolicited_response_buffer.appendleft(response)
+                    elif response.response == command.response_terminator:
+                        break
+                    else:
+                        responses.append(response)
+                except asyncio.TimeoutError:
+                    self.logger.error(f'{command} timed out')
+                    self.lock.release()
+                    self.start_read_loop()
+                    return []
         self.lock.release()
         self.start_read_loop()
-
-        assert responses[0].response == command.command, Exception('Received response to wrong command')
 
         return responses[1:]
