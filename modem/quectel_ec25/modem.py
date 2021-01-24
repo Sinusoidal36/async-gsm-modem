@@ -1,6 +1,6 @@
 from ..base import ATModem, Command, ExtendedCommand
 from .response_mapper import ResponseMapper
-from .sms import SMSStatus, SMS
+from .sms import SMS
 from .constants import STATUS_MAP, DELETE_FLAG
 from typing import List, Type
 
@@ -15,11 +15,7 @@ class ProductInfo:
         return f'{self.manufacturer} {self.model} {self.revision}'
 
     def to_dict(self):
-        return {
-            'manufacturer': self.manufacturer,
-            'model': self.model,
-            'revision': self.revision
-        }
+        return vars(self)
 
 class Modem(ATModem):
 
@@ -42,7 +38,7 @@ class Modem(ATModem):
         command = ExtendedCommand(b'AT+CMGR', b'OK').write(str(index).encode())
         responses = await self.send_command(command)
 
-    async def list_messages(self, status: str = 'ALL') -> List[SMSStatus]:
+    async def list_messages(self, status: str = 'ALL') -> List[SMS]:
         assert status in STATUS_MAP, \
             KeyError(f'Invalid status {status}: {tuple(STATUS_MAP.keys())}')
         status = STATUS_MAP[status]
@@ -54,7 +50,7 @@ class Modem(ATModem):
         for n in range(len(responses)//2):
             index, stat, alpha, length = responses[n*2].response.lstrip(b'+CMGL: ').split(b',')
             pdu = responses[(n*2)+1].response
-            statuses.append(SMSStatus(index, stat, alpha, length, pdu))
+            statuses.append(SMS(index, stat, alpha, length, pdu))
 
         return statuses
 
