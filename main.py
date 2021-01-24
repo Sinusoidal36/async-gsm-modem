@@ -1,19 +1,20 @@
 import asyncio
 import logging
 import sys
-from modem.at_modem import ATModem, Command
+from modem.quectel_ec25 import Modem
 
-async def test_command(modem):
-    await asyncio.sleep(2)
-    await modem.send_command(Command(name='AT', command=b'AT'))
+async def test(modem):
+    await modem.connect()
+    await modem.ping()
+    await modem.list_messages()
+    await modem.read_message(0)
+    await modem.close()
 
 def main():
     loop = asyncio.get_event_loop()
-    modem = ATModem('/dev/ttyUSB2', 115200)
+    modem = Modem('/dev/ttyUSB2', 115200)
     try:
-        asyncio.ensure_future(modem.connect())
-        asyncio.ensure_future(test_command(modem))
-        loop.run_forever()
+        loop.run_until_complete(test(modem))
     except KeyboardInterrupt:
         loop.run_until_complete(modem.close())
 
