@@ -1,6 +1,6 @@
 # async-gsm-modem
 
-async-gsm-modem is a YetAnother™ Python library for controlling an AT GSM modem using asyncio.
+async-gsm-modem is YetAnother™ Python library for controlling an AT GSM modem using asyncio.
 
 
 
