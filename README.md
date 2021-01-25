@@ -12,7 +12,7 @@ pip3 install asyncio-gsm-modem
 
 ```python
 import asyncio
-from modem.quectel_ec25 import Modem
+from asyncio_gsm_modem.quectel_ec25 import Modem
 
 async def example():
   modem = Modem('/dev/ttyUSB2', 115200)
