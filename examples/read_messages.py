@@ -1,15 +1,13 @@
 import asyncio
 import logging
 import sys
-from modem.quectel_ec25 import Modem
+from async_gsm_modem.quectel_ec25 import Modem
 
 async def example(modem):
     await modem.connect()
     await modem.ping()
-    while True:
-        for message in await modem.list_messages('RECEIVED_UNREAD'):
-            print(message)
-        await asyncio.sleep(5)
+    for message in await modem.list_messages('ALL'):
+        print(message)
     await modem.close()
 
 def main():
@@ -17,7 +15,7 @@ def main():
     modem = Modem('/dev/ttyUSB2', 115200)
     try:
         loop.run_until_complete(example(modem))
-    except KeyboardInterrupt:
+    except:
         loop.run_until_complete(modem.close())
 
 if __name__ == '__main__':

@@ -1,18 +1,18 @@
-# asyncio-gsm-modem
+# async-gsm-modem
 
-asyncio-gsm-modem is a Python library for controlling an AT GSM modem.
+async-gsm-modem is a Python library for controlling an AT GSM modem.
 
 ## Installation
 
 ```bash
-pip3 install asyncio-gsm-modem
+pip3 install async-gsm-modem
 ```
 
 ## Usage
 
 ```python
 import asyncio
-from asyncio_gsm_modem.quectel_ec25 import Modem
+from async_gsm_modem.quectel_ec25 import Modem
 
 async def example():
   modem = Modem('/dev/ttyUSB2', 115200)
