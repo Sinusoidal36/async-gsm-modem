@@ -1,6 +1,8 @@
 # async-gsm-modem
 
-async-gsm-modem is a Python library for controlling an AT GSM modem.
+async-gsm-modem is a Python library for controlling an AT GSM modem using asyncio.
+
+
 
 ## Installation
 
@@ -26,11 +28,18 @@ loop = asyncio.get_event_loop()
 loop.run_until_complete(example())
 
 ```
+## TODO
+
+- Fully implement EC25 module
+- Implement generic modem class
+- MMS functionality
+- Testing
+- More examples
+- Full typing
 
 ## Contributing
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
 
-Please make sure to update tests as appropriate.
 
 ## License
 [Apache 2](https://choosealicense.com/licenses/apache-2.0/)
