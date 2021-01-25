@@ -35,6 +35,7 @@ loop.run_until_complete(example())
 - MMS functionality
 - Testing
 - More examples
+- Documentation
 - Full typing
 
 ## Contributing
