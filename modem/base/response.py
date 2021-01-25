@@ -2,12 +2,17 @@ from datetime import datetime
 
 class Response:
 
-    def __init__(self, name: str, response: bytes):
+    def __init__(self, response: bytes):
         self.response = response
-        self.date = datetime.utcnow()
 
     def __str__(self):
-        return f'Response({self.response.decode()})'
+        try:
+            return f'Response({self.response.decode()})'
+        except UnicodeDecodeError:
+            return f'Response({self.response})'
+
+    def __bytes__(self):
+        return self.response
 
 class UnsolicitedResponse(Response):
     pass

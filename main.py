@@ -6,7 +6,7 @@ from modem.quectel_ec25 import Modem
 async def test(modem):
     await modem.connect()
     await modem.ping()
-
+    print(await modem.imei())
     await modem.close()
 
 def main():

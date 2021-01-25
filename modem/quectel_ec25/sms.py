@@ -4,20 +4,11 @@ from smspdu.fields import SMSDeliver
 
 class SMS:
 
-    def __init__(
-        self,
-        index: bytes,
-        status: bytes,
-        alpha: bytes,
-        length: bytes,
-        pdu: bytes,
-        ):
-
+    def __init__(self, index: bytes, status: bytes, alpha: bytes, length: bytes, pdu: bytes):
         self.index = int(index)
         self.status = STATUS_MAP_R[status]
-        self.length = int(length)
         self.alpha = alpha.decode()
-
+        self.length = int(length)
         self.pdu = pdu
 
         data = SMSDeliver.decode(StringIO(pdu.decode()))
