@@ -6,7 +6,11 @@ from modem.quectel_ec25 import Modem
 async def test(modem):
     await modem.connect()
     await modem.ping()
-    print(await modem.imei())
+    #await modem.delete_messages()
+    while True:
+        for message in await modem.list_messages('RECEIVED_UNREAD'):
+            print(message)
+        await asyncio.sleep(5)
     await modem.close()
 
 def main():

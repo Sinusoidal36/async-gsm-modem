@@ -21,3 +21,30 @@ DELETE_FLAG = {
     'READ_AND_UNSENT': b'3',
     'ALL': b'4'
 }
+
+UNSOLICITED_RESULT_CODES = [
+    b'+CREG',
+    b'+CGREG',
+    b'+CTZV',
+    b'+CTZE',
+    b'+CMTI',
+    b'+CMT',
+    b'^HCMT',
+    b'+CBM',
+    b'+CDS',
+    b'+CDSI',
+    b'^HCDS',
+    b'+COLP',
+    b'+CLIP',
+    b'+CRING',
+    b'+CCWA',
+    b'+CSSI',
+    b'+CSSU',
+    b'+CUSD',
+    b'RDY',
+    b'+CFUN',
+    b'+CPIN',
+    b'+QIND',
+    b'POWERED DOWN',
+    b'+CGEV'
+]

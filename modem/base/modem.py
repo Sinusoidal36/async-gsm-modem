@@ -5,8 +5,7 @@ import serial_asyncio
 from collections import deque
 from typing import Type, Callable, List
 from .command import Command
-from .response import Response, UnsolicitedResponse
-from .response_mapper import ResponseMapper
+from .response import Response
 import logging
 
 class ATModem:
@@ -15,18 +14,12 @@ class ATModem:
     RESP_TERMINATOR = b'OK'
     CMD_TERMINATOR = b'\r'
 
-    def __init__(
-        self,
-        device: str,
-        baud_rate: int,
-        response_mapper: Type[ResponseMapper],
-        ):
+    def __init__(self, device: str, baud_rate: int, urc: List[bytes] = None):
         self.device = device
         self.baud_rate = baud_rate
 
-        self.response_mapper = response_mapper
-        
-        self.unsolicited_response_buffer = deque()
+        self.urc = urc if urc else []
+        self.urc_buffer = deque()
 
         self._close = False
         self._lock = asyncio.Lock()
@@ -58,45 +51,58 @@ class ATModem:
         await self.writer.drain()
         self.logger.debug(command)
 
-    async def read(self, seperator: bytes = None, terminator: bytes = None, timeout: int = 5) -> Response:
-        seperator = seperator if seperator else self.RESP_SEPERATOR
-        terminator = terminator if terminator else self.RESP_TERMINATOR
+    async def send_command(self, command: Type[Command]) -> List[Response]:
+        await self.lock()
+        await self.write(command)
+        responses = await self.read()
+        self.unlock()
+        return responses
+
+    async def read(self, seperator: bytes = None, terminator: bytes = None, timeout: int = 5) -> List[Response]:
+        seperator = seperator if seperator != None else self.RESP_SEPERATOR
+        terminator = terminator if terminator != None else self.RESP_TERMINATOR
         responses = []
         while True:
-            try:
-                response = await asyncio.wait_for(self.reader.readuntil(seperator), timeout)
-                response = Response(response.rstrip(seperator))
-                self.logger.debug(response)
+            response = await self.read_response(seperator, timeout)
+            if any([bytes(response).startswith(urc) for urc in self.urc]):
+                self.urc_buffer.appendleft(response)
+            else:
                 responses.append(response)
-                if bytes(response) == terminator:
-                    return responses
-            except IncompleteReadError:
-                return
-            except asyncio.TimeoutError:
+            if (bytes(response) == terminator) or response is None:
                 return responses
+
+    async def read_response(self, seperator: bytes = None, timeout: int = 5) -> Response:
+        seperator = seperator if seperator != None else self.RESP_SEPERATOR
+        try:
+            response = await asyncio.wait_for(self.reader.readuntil(seperator), timeout)
+            response = Response(response.rstrip(seperator))
+            self.logger.debug(response)
+            return response
+        except IncompleteReadError:
+            return
+        except asyncio.TimeoutError:
+            return
 
     async def close(self):
         self._close = True
         self.writer.close()
         await self.writer.wait_closed()
 
-    async def unsolicited_response_handler(self, response: Type[Response]) -> None:
+    async def urc_handler(self, response: Type[Response]) -> None:
         pass
 
     async def read_loop(self):
-        try:
-            while self.unsolicited_response_buffer:
-                response = unsolicited_response_buffer.pop()
-                await self.unsolicited_response_handler(response)
+        while True:
+            try:
+                while self.urc_buffer:
+                    response = urc_buffer.pop()
+                    await self.urc_handler(response)
 
-            response = await self.read_response()
-            await self.unsolicited_response_handler(response)
-            if not self._close:
-                self.read_loop_task = asyncio.create_task(self.read_loop())
-        except asyncio.CancelledError:
-            self.logger.debug('Read Loop Cancelled')
-        finally:
-            return
+                response = await self.read_response()
+                if response:
+                    await self.urc_handler(response)
+            except asyncio.CancelledError:
+                return
 
     def start_read_loop(self):
         self.read_loop_task = asyncio.create_task(self.read_loop())
@@ -108,22 +114,3 @@ class ATModem:
                 await self.read_loop_task
             except asyncio.CancelledError:
                 return
-    
-    async def read_response(self, seperator: bytes = None) -> Response:
-        seperator = seperator if seperator else self.RESP_SEPERATOR
-        try:
-            response = await self.reader.readuntil(seperator)
-            response = response.rstrip(seperator)
-            response = self.response_mapper.map(response)
-            self.logger.debug(response)
-            return response
-        except IncompleteReadError:
-            return
-            #self.logger.warning('Read was interrupted')
-
-    async def send_command(self, command: Type[Command]) -> List[Response]:
-        await self.lock()
-        await self.write(command)
-        responses = await self.read()
-        self.unlock()
-        return responses
