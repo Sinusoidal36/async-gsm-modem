@@ -1,7 +1,6 @@
 from ..base.modem import ATModem
 from ..base.command import Command, ExtendedCommand
 from ..base.pdu import encodeSmsSubmitPdu, encodeGsm7
-from .response_mapper import ResponseMapper
 from .sms import SMS
 from .constants import STATUS_MAP, DELETE_FLAG, UNSOLICITED_RESULT_CODES
 from typing import List, Type

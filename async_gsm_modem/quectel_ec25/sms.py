@@ -14,7 +14,7 @@ class SMS:
         data = SMSDeliver.decode(StringIO(pdu.decode()))
         self.data = data
 
-        self.text = data['user_data']['data']
+        self.text = str(data['user_data']['data'])
         self.from_number = data['sender']['number']
         self.date = data['scts']
 
