@@ -1,5 +1,4 @@
 # Implementation from https://github.com/babca/python-gsmmodem/blob/master/gsmmodem/pdu.py
-
 from __future__ import unicode_literals
 
 import sys, codecs
@@ -28,6 +27,7 @@ GSM7_EXTENDED = {
     '|':  chr(0x40),
     '€':  chr(0x65)
 }
+
 # Maximum message sizes for each data coding
 MAX_MESSAGE_LENGTH = {
     0x00: 160, # GSM-7
@@ -36,9 +36,11 @@ MAX_MESSAGE_LENGTH = {
 }
 
 # Maximum message sizes for each data coding for multipart messages
-MAX_MULTIPART_MESSAGE_LENGTH = {0x00: 153, # GSM-7
-                                0x04: 133, # 8-bit TODO: Check this value!
-                                0x08: 67}  # UCS2
+MAX_MULTIPART_MESSAGE_LENGTH = {
+    0x00: 153, # GSM-7
+    0x04: 133, # 8-bit TODO: Check this value!
+    0x08: 67# UCS2
+}
 
 class SmsPduTzInfo(tzinfo):
     """ Simple implementation of datetime.tzinfo for handling timestamp GMT offsets specified in SMS PDUs """
@@ -182,7 +184,6 @@ class Concatenation(InformationElement):
         self.dataLength = len(self.data)
         return super(Concatenation, self).encode()
 
-
 class PortAddress(InformationElement):
     """ IE that indicates an Application Port Addressing Scheme.
 
@@ -214,14 +215,13 @@ class PortAddress(InformationElement):
         self.dataLength = len(self.data)
         return super(PortAddress, self).encode()
 
-
 # Map of recognized IEIs
-IEI_CLASS_MAP = {0x00: Concatenation, # Concatenated short messages, 8-bit reference number
-                 0x08: Concatenation, # Concatenated short messages, 16-bit reference number
-                 0x04: PortAddress, # Application port addressing scheme, 8 bit address
-                 0x05: PortAddress # Application port addressing scheme, 16 bit address
-                }
-
+IEI_CLASS_MAP = {
+    0x00: Concatenation, # Concatenated short messages, 8-bit reference number
+    0x08: Concatenation, # Concatenated short messages, 16-bit reference number
+    0x04: PortAddress, # Application port addressing scheme, 8 bit address
+    0x05: PortAddress # Application port addressing scheme, 16 bit address
+}
 
 class Pdu(object):
     """ Encoded SMS PDU. Contains raw PDU data and related meta-information """

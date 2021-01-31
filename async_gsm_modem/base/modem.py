@@ -53,8 +53,12 @@ class ATModem:
 
     async def send_command(self, command: Type[Command]) -> List[Response]:
         await self.lock()
-        await self.write(command)
-        responses = await self.read()
+        try:
+            await self.write(command)
+            responses = await self.read()
+        except Exception as e:
+            self.logger.error(e)
+            return
         self.unlock()
         return responses
 
@@ -92,6 +96,8 @@ class ATModem:
         pass
 
     async def read_loop(self):
+        if self._lock.locked():
+            return
         while True:
             try:
                 while self.urc_buffer:
