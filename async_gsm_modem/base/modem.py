@@ -101,7 +101,7 @@ class ATModem:
         while True:
             try:
                 while self.urc_buffer:
-                    response = urc_buffer.pop()
+                    response = self.urc_buffer.pop()
                     await self.urc_handler(response)
 
                 response = await self.read_response()
