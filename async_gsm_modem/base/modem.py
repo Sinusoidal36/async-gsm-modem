@@ -63,8 +63,8 @@ class ATModem:
             return responses
 
     async def read(self, seperator: bytes = None, terminator: bytes = None, timeout: int = 5) -> List[Response]:
-        seperator = seperator if seperator != None else self.RESP_SEPERATOR
-        terminator = terminator if terminator != None else self.RESP_TERMINATOR
+        seperator = seperator if seperator else self.RESP_SEPERATOR
+        terminator = terminator if terminator else self.RESP_TERMINATOR
         responses = []
         while True:
             response = await self.read_response(seperator, timeout)
@@ -76,7 +76,7 @@ class ATModem:
                 return responses
 
     async def read_response(self, seperator: bytes = None, timeout: int = 5) -> Response:
-        seperator = seperator if seperator != None else self.RESP_SEPERATOR
+        seperator = seperator if seperator else self.RESP_SEPERATOR
         try:
             response = await asyncio.wait_for(self.reader.readuntil(seperator), timeout)
             response = Response(response.rstrip(seperator))
