@@ -92,18 +92,21 @@ class ATModem:
         self.writer.close()
         await self.writer.wait_closed()
 
-    async def urc_handler(self, response: Response) -> None:
-        pass
-
+    async def urc_handler_loop(self, response: Response) -> None:
+        while True:
+            try:
+                if self.urc_buffer:
+                    self.logger.debug(self.urc_buffer.pop())
+            except asyncio.CancelledError:
+                raise
+            except:
+                pass
+                
     async def read_loop(self):
         if self._lock.locked():
             return
         while True:
             try:
-                while self.urc_buffer:
-                    response = self.urc_buffer.pop()
-                    await self.urc_handler(response)
-
                 response = await self.read_response()
                 if response:
                     await self.urc_handler(response)
