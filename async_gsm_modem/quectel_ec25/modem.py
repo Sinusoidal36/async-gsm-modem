@@ -29,7 +29,7 @@ class Modem(ATModem):
     async def ping(self):
         await self.send_command(Command(b'AT'))
 
-    async def product_info(self) -> Type[ProductInfo]:
+    async def product_info(self) -> ProductInfo:
         responses = await self.send_command(Command(b'ATI'))
         return ProductInfo(*[r.response.decode() for r in responses[1:4]])
 
@@ -45,7 +45,7 @@ class Modem(ATModem):
         responses = await self.send_command(Command(b'AT+CNUM'))
         return bytes(responses[1]).decode()
 
-    async def read_message(self, index: int) -> Type[SMS]:
+    async def read_message(self, index: int) -> SMS:
         command = ExtendedCommand(b'AT+CMGR').write(str(index).encode())
         responses = await self.send_command(command)
         if b'+CMGR' not in bytes(responses[1]):

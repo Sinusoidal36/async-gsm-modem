@@ -45,13 +45,13 @@ class ATModem:
         self.start_read_loop()
         self.logger.debug('Unlocked')
 
-    async def write(self, command: Type[Command], terminator: bytes = None):
+    async def write(self, command: Command, terminator: bytes = None):
         terminator = terminator if terminator else self.CMD_TERMINATOR
         self.writer.write(bytes(command)+terminator)
         await self.writer.drain()
         self.logger.debug(command)
 
-    async def send_command(self, command: Type[Command]) -> List[Response]:
+    async def send_command(self, command: Command) -> List[Response]:
         await self.lock()
         try:
             await self.write(command)
@@ -92,7 +92,7 @@ class ATModem:
         self.writer.close()
         await self.writer.wait_closed()
 
-    async def urc_handler(self, response: Type[Response]) -> None:
+    async def urc_handler(self, response: Response) -> None:
         pass
 
     async def read_loop(self):
