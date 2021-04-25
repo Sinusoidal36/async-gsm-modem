@@ -33,6 +33,13 @@ class ATModem:
         )
         self.logger.debug(f'Connected to {self.device}')
         self.start_read_loop()
+        self.urc_handler_loop_task = asyncio.create_task(self.urc_handler_loop())
+
+    async def close(self):
+        await self.stop_read_loop()
+        await self.stop_urc_handler_loop()
+        self.writer.close()
+        await self.writer.wait_closed()
 
     async def lock(self):
         await self.stop_read_loop()
@@ -50,19 +57,18 @@ class ATModem:
         await self.writer.drain()
         self.logger.debug(command)
 
-    async def send_command(self, command: Command) -> List[Response]:
+    async def send_command(self, command: Command) -> List[bytes]:
         try:
             await self.lock()
             await self.write(command)
-            responses = await self.read()
+            return await self.read()
         except Exception as e:
             self.logger.error(f'Failed to send command: {command}', exc_info=True)
-            responses = []
+            return []
         finally:
             self.unlock()
-            return responses
 
-    async def read(self, seperator: bytes = None, terminator: bytes = None, timeout: int = 5) -> List[Response]:
+    async def read(self, seperator: bytes = None, terminator: bytes = None, timeout: int = 5) -> List[bytes]:
         seperator = seperator if seperator else self.RESP_SEPERATOR
         terminator = terminator if terminator else self.RESP_TERMINATOR
         responses = []
@@ -70,18 +76,18 @@ class ATModem:
             response = await self.read_response(seperator, timeout)
             if not response:
                 return responses
-            if any([bytes(response).startswith(urc) for urc in self.urc]):
+            if any([response.startswith(urc) for urc in self.urc]):
                 self.urc_buffer.append(response)
             else:
                 responses.append(response)
-            if (bytes(response) == terminator):
+            if (response == terminator):
                 return responses
 
-    async def read_response(self, seperator: bytes = None, timeout: int = 5) -> Response:
+    async def read_response(self, seperator: bytes = None, timeout: int = 5) -> bytes:
         seperator = seperator if seperator else self.RESP_SEPERATOR
         try:
             response = await asyncio.wait_for(self.reader.readuntil(seperator), timeout)
-            response = Response(response.rstrip(seperator))
+            response = response.rstrip(seperator)
             self.logger.debug(response)
             return response
         except IncompleteReadError:
@@ -89,12 +95,7 @@ class ATModem:
         except asyncio.TimeoutError:
             self.logger.debug('Read timed out before receiving a response')
 
-    async def close(self):
-        self._close = True
-        self.writer.close()
-        await self.writer.wait_closed()
-
-    async def urc_handler_loop(self, response: Response) -> None:
+    async def urc_handler_loop(self) -> None:
         while True:
             try:
                 if self.urc_buffer:
@@ -103,6 +104,15 @@ class ATModem:
                 raise
             except:
                 pass
+            await asyncio.sleep(0.1)
+
+    async def stop_urc_handler_loop(self) -> None:
+        if self.urc_handler_loop_task:
+            self.urc_handler_loop_task.cancel()
+            try:
+                await self.urc_handler_loop_task
+            except asyncio.CancelledError:
+                return
                 
     async def read_loop(self):
         if self._lock.locked():
@@ -110,8 +120,6 @@ class ATModem:
         while True:
             try:
                 response = await self.read_response()
-                if response:
-                    await self.urc_handler(response)
             except asyncio.CancelledError:
                 return
 
