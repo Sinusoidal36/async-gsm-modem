@@ -68,11 +68,13 @@ class ATModem:
         responses = []
         while True:
             response = await self.read_response(seperator, timeout)
+            if not response:
+                return responses
             if any([bytes(response).startswith(urc) for urc in self.urc]):
                 self.urc_buffer.append(response)
             else:
                 responses.append(response)
-            if (bytes(response) == terminator) or response is None:
+            if (bytes(response) == terminator):
                 return responses
 
     async def read_response(self, seperator: bytes = None, timeout: int = 5) -> Response:
