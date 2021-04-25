@@ -57,10 +57,11 @@ class ATModem:
             await self.write(command)
             responses = await self.read()
         except Exception as e:
-            self.logger.error(e)
-            return
-        self.unlock()
-        return responses
+            self.logger.error(f'Failed to send command: {command}', exc_info=True)
+            responses = []
+        finally:
+            self.unlock()
+            return responses
 
     async def read(self, seperator: bytes = None, terminator: bytes = None, timeout: int = 5) -> List[Response]:
         seperator = seperator if seperator != None else self.RESP_SEPERATOR
