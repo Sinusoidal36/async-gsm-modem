@@ -55,6 +55,21 @@ async def test_connect(mocker):
     await modem.close()
 
 @pytest.mark.asyncio
+async def test_read_response(mocker, mock_modem):
+    mocker.patch.object(DummyReader, 'readuntil', return_value=b'OK\r\n')
+    response = await mock_modem.read_response()
+    assert response == b'OK'
+
+@pytest.mark.asyncio
+async def test_read_response_timeout(mocker, mock_modem):
+    async def sleep(*args, **kwargs):
+        await asyncio.sleep(1)
+        return b'OK\r\n'
+    mocker.patch.object(DummyReader, 'readuntil', side_effect=sleep)
+    response = await mock_modem.read_response(timeout=0)
+    assert not response
+
+@pytest.mark.asyncio
 async def test_send_command(mocker, mock_modem, generic_test_command):
     command, expected_response = generic_test_command
     mocker.patch.object(DummyReader, 'readuntil', side_effect=expected_response)

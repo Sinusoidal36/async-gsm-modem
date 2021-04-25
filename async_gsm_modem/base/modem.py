@@ -33,7 +33,7 @@ class ATModem:
         )
         self.logger.debug(f'Connected to {self.device}')
         self.start_read_loop()
-        self.urc_handler_loop_task = asyncio.create_task(self.urc_handler_loop())
+        self.start_urc_handler_loop()
 
     async def close(self):
         await self.stop_read_loop()
@@ -57,11 +57,11 @@ class ATModem:
         await self.writer.drain()
         self.logger.debug(command)
 
-    async def send_command(self, command: Command) -> List[bytes]:
+    async def send_command(self, command: Command, timeout: int = 5) -> List[bytes]:
         try:
             await self.lock()
             await self.write(command)
-            return await self.read()
+            return await asyncio.wait_for(self.read(), timeout)
         except Exception as e:
             self.logger.error(f'Failed to send command: {command}', exc_info=True)
             return []
@@ -105,6 +105,9 @@ class ATModem:
             except:
                 pass
             await asyncio.sleep(0.1)
+
+    def start_urc_handler_loop(self) -> None:
+        self.urc_handler_loop_task = asyncio.create_task(self.urc_handler_loop())
 
     async def stop_urc_handler_loop(self) -> None:
         if self.urc_handler_loop_task:
