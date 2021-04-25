@@ -2,7 +2,6 @@ import asyncio
 from asyncio.exceptions import IncompleteReadError
 from datetime import datetime
 import serial_asyncio
-from collections import deque
 from typing import Type, Callable, List
 from .command import Command
 from .response import Response
@@ -18,8 +17,8 @@ class ATModem:
         self.device = device
         self.baud_rate = baud_rate
 
-        self.urc = urc if urc else []
-        self.urc_buffer = deque()
+        self.urc = set(urc) if urc else set()
+        self.urc_buffer = []
 
         self._close = False
         self._lock = asyncio.Lock()
@@ -52,8 +51,8 @@ class ATModem:
         self.logger.debug(command)
 
     async def send_command(self, command: Command) -> List[Response]:
-        await self.lock()
         try:
+            await self.lock()
             await self.write(command)
             responses = await self.read()
         except Exception as e:
@@ -70,7 +69,7 @@ class ATModem:
         while True:
             response = await self.read_response(seperator, timeout)
             if any([bytes(response).startswith(urc) for urc in self.urc]):
-                self.urc_buffer.appendleft(response)
+                self.urc_buffer.append(response)
             else:
                 responses.append(response)
             if (bytes(response) == terminator) or response is None:
@@ -97,7 +96,7 @@ class ATModem:
         while True:
             try:
                 if self.urc_buffer:
-                    self.logger.debug(self.urc_buffer.pop())
+                    self.logger.debug(self.urc_buffer.pop(0))
             except asyncio.CancelledError:
                 raise
             except:
