@@ -12,17 +12,7 @@ def command_list_messages():
         [
             b'+CMGL: 0,0,,51',
             b'07912160130350F7040B915110338063F800001240227182648A24355C6C269BC5662DB218566BD1CCE15B0B57C3CD5AE41AB9268E996530721807',
-            b'OK'
-        ]
-    )
-
-@pytest.fixture
-def command_with_urc():
-    return (
-        ExtendedCommand(b'AT+CMGL').write(b'4'),
-        [
-            b'+CMGL: 0,0,,51',
-            b'+CMTI:',
+            b'+CMGL: 1,0,,51',
             b'07912160130350F7040B915110338063F800001240227182648A24355C6C269BC5662DB218566BD1CCE15B0B57C3CD5AE41AB9268E996530721807',
             b'OK'
         ]

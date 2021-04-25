@@ -36,7 +36,7 @@ def mock_serial_connection(mocker):
 async def mock_modem(mocker):
     mocker.patch.object(ATModem, 'start_read_loop', return_value=None)
     modem = ATModem('/dev/ttyXRUSB2', 115200)
-    modem.logger.setLevel(logging.DEBUG)
+    modem.at_logger.setLevel(logging.DEBUG)
     await modem.connect()
     yield modem
     await modem.close()
@@ -57,7 +57,7 @@ async def test_connect(mocker):
 @pytest.mark.asyncio
 async def test_read_response(mocker, mock_modem):
     mocker.patch.object(DummyReader, 'readuntil', return_value=b'OK\r\n')
-    response = await mock_modem.read_response()
+    response = await mock_modem.read()
     assert response == b'OK'
 
 @pytest.mark.asyncio
@@ -66,25 +66,29 @@ async def test_read_response_timeout(mocker, mock_modem):
         await asyncio.sleep(1)
         return b'OK\r\n'
     mocker.patch.object(DummyReader, 'readuntil', side_effect=sleep)
-    response = await mock_modem.read_response(timeout=0)
-    assert not response
+    exception = None
+    try:
+        response = await mock_modem.read(timeout=0)
+    except Exception as e:
+        exception = e
+    assert isinstance(exception, asyncio.TimeoutError)
 
 @pytest.mark.asyncio
 async def test_send_command(mocker, mock_modem, generic_test_command):
     command, expected_response = generic_test_command
     mocker.patch.object(DummyReader, 'readuntil', side_effect=expected_response)
 
-    response = await asyncio.wait_for(mock_modem.send_command(command), 1)
+    response = await mock_modem.send_command(command, timeout=1)
     assert response == expected_response
 
 @pytest.mark.asyncio
 async def test_send_command_with_urc(mocker, mock_modem, generic_test_command):
-    mock_modem.urc = set([b'+CMTI'])
+    mock_modem.urc = [(b'+CMT', 2)]
 
     command, expected_response = generic_test_command
-    response_with_urc = expected_response[:-1] + [b'+CMTI'] + expected_response[-1:]
+    response_with_urc = expected_response[:-1] + [b'+CMT', b'mock'] + expected_response[-1:]
     mocker.patch.object(DummyReader, 'readuntil', side_effect=response_with_urc)
 
-    response = await asyncio.wait_for(mock_modem.send_command(command), 1)
+    response = await mock_modem.send_command(command, timeout=1)
     assert response == expected_response
     assert mock_modem.urc_buffer
