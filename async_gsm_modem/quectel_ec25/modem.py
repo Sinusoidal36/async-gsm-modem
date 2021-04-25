@@ -37,6 +37,14 @@ class Modem(ATModem):
         responses = await self.send_command(Command(b'AT+GSN'))
         return bytes(responses[1]).decode()
 
+    async def imsi(self):
+        responses = await self.send_command(Command(b'AT+CIMI'))
+        return bytes(responses[1]).decode()
+
+    async def number(self):
+        responses = await self.send_command(Command(b'AT+CNUM'))
+        return bytes(responses[1]).decode()
+
     async def read_message(self, index: int) -> Type[SMS]:
         command = ExtendedCommand(b'AT+CMGR').write(str(index).encode())
         responses = await self.send_command(command)
@@ -70,13 +78,16 @@ class Modem(ATModem):
 
         command = ExtendedCommand(b'AT+CMGL').write(status)
         responses = await self.send_command(command)
-        responses = responses[1:-2]
+        #responses = responses[1:-2]
 
         messages = []
-        for n in range(len(responses)//2):
-            index, status, alpha, length = bytes(responses[n*2]).lstrip(b'+CMGL: ').split(b',')
-            pdu = bytes(responses[(n*2)+1])
-            messages.append(SMS(index, status, alpha, length, pdu))
+        for n in range(len(responses[1:-2])//2):
+            try:
+                index, status, alpha, length = bytes(responses[1:-2][n*2]).lstrip(b'+CMGL: ').split(b',')
+                pdu = bytes(responses[1:-2][(n*2)+1])
+                messages.append(SMS(index, status, alpha, length, pdu))
+            except:
+                self.logger.error([str(r) for r in responses], exc_info=True)
 
         return messages
 
