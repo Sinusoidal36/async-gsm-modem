@@ -13,7 +13,7 @@ class ATModem:
     RESP_TERMINATOR = b'OK'
     CMD_TERMINATOR = b'\r'
 
-    def __init__(self, device: str, baud_rate: int, urc: List[bytes] = None):
+    def __init__(self, device: str, baud_rate: int, urc: List[bytes] = []):
         self.device = device
         self.baud_rate = baud_rate
 
@@ -83,9 +83,9 @@ class ATModem:
             self.logger.debug(response)
             return response
         except IncompleteReadError:
-            return
+            self.logger.debug('Read was canceled before completion')
         except asyncio.TimeoutError:
-            return
+            self.logger.debug('Read timed out before receiving a response')
 
     async def close(self):
         self._close = True
