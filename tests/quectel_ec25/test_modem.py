@@ -54,7 +54,7 @@ async def test_ping(mocker, modem):
 
 @pytest.mark.asyncio
 async def test_product_info(mocker, modem):
-    expected_response = [b'ATI', b'OK']
+    expected_response = [b'ATI', b'Quectel', b'', b'OK']
     mocker.patch.object(DummyReader, 'readuntil', side_effect=expected_response)
 
     product_info = await modem.product_info()
