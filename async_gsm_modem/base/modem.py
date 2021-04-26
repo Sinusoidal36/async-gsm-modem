@@ -1,5 +1,5 @@
 import asyncio
-from asyncio.exceptions import IncompleteReadError
+from asyncio.exceptions import IncompleteReadError, TimeoutError, CancelledError
 from datetime import datetime
 import serial_asyncio
 from typing import Type, Callable, List, Tuple
@@ -23,6 +23,7 @@ class ATModem:
 
         self._close = False
         self._lock = asyncio.Lock()
+        self.read_task = None
         self.read_loop_task = None
 
         self.at_logger = logging.getLogger('ATModem')
@@ -43,15 +44,17 @@ class ATModem:
         await self.stop_urc_handler_loop()
         self.writer.close()
         await self.writer.wait_closed()
+        self.at_logger.debug(f'Modem closed')
 
     async def lock(self):
         await self._lock.acquire()
-        await self.stop_read_loop()
+        if self.read_task and not self.read_task.done():
+            self.read_task.cancel()
+            await self.read_task
         self.at_logger.debug('Locked')
 
     def unlock(self):
         self._lock.release()
-        self.start_read_loop()
         self.at_logger.debug('Unlocked')
 
     async def write(self, command: Command, terminator: bytes = None):
@@ -63,18 +66,29 @@ class ATModem:
     async def read(self, seperator: bytes = None, timeout: int = 5) -> bytes:
         seperator = seperator if seperator else self.RESP_SEPERATOR
         try:
-            data = await asyncio.wait_for(self.reader.readuntil(seperator), timeout)
+            self.read_task = asyncio.create_task(self.reader.readuntil(seperator))
+            data = await asyncio.wait_for(self.read_task, timeout)
             return data.rstrip(seperator)
         except IncompleteReadError:
             self.at_logger.debug('Read was canceled before completion')
+        except CancelledError:
+            self.read_task.cancel()
+            await self.read_task
+            raise
 
     async def send_command(self, command: Command, timeout: int = 5) -> List[bytes]:
         try:
             await self.lock()
             await self.write(command)
-            response = await asyncio.wait_for(self.read_response(), timeout)
+            response = await self.read_response(timeout=timeout)
             self.at_logger.debug(response)
             return response
+        except TimeoutError:
+            self.at_logger.error(f'Response timed out sending: {command}')
+            return []
+        except CancelledError:
+            self.at_logger.debug(f'Command cancelled: {command}')
+            raise
         except Exception as e:
             self.at_logger.error(f'Failed to send command: {command}', exc_info=True)
             return []
@@ -88,8 +102,10 @@ class ATModem:
         while True:
             try:
                 response_chunk = await self.read(seperator, timeout)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 break
+            except CancelledError:
+                raise
 
             # if URC was received read it out and push to urc buffer then continue processing expected response
             urc = next(filter(lambda x: response_chunk.startswith(x[0]), self.urc), None)
@@ -102,6 +118,10 @@ class ATModem:
                         urc_chunks.append(await self.read())
                     self.urc_buffer.append(UnsolicitedResultCode(chunks=urc_chunks, code=code))
                     continue
+                except CancelledError:
+                    raise
+                except TimeoutError:
+                    break
                 except:
                     self.at_logger.error('URC was received but failed to process', exc_info=True)
             elif response_chunk:
@@ -120,10 +140,10 @@ class ATModem:
             try:
                 if self.urc_buffer:
                     await self.urc_handler(self.urc_buffer.pop(0))
-            except asyncio.CancelledError:
+            except CancelledError:
                 raise
             except:
-                pass
+                self.at_logger.error(exc_info=True)
             await asyncio.sleep(0.1)
 
     def start_urc_handler_loop(self) -> None:
@@ -134,24 +154,22 @@ class ATModem:
             self.urc_handler_loop_task.cancel()
             try:
                 await self.urc_handler_loop_task
-            except asyncio.CancelledError:
+            except CancelledError:
                 return
 
     async def urc_handler(self, response: UnsolicitedResultCode) -> None:
         pass
                 
     async def read_loop(self):
-        if self._lock.locked():
-            return
         while True:
             try:
-                response = await self.read_response()
-                if response:
-                    self.at_logger.warn(f'Unexpected response received: {response}')
-            except asyncio.TimeoutError:
+                if not self._lock.locked():
+                    response = await self.read_response()
+                    if response:
+                        self.at_logger.warn(f'Unexpected response received: {response}')
+                await asyncio.sleep(0.1)
+            except TimeoutError:
                 pass
-            except asyncio.CancelledError:
-                return
 
     def start_read_loop(self):
         self.read_loop_task = asyncio.create_task(self.read_loop())
@@ -161,5 +179,6 @@ class ATModem:
             self.read_loop_task.cancel()
             try:
                 await self.read_loop_task
-            except asyncio.CancelledError:
-                return
+            except CancelledError:
+                self.at_logger.debug('Read loop cancelled successfully')
+                return True

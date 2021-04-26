@@ -18,6 +18,13 @@ class Response:
     def __eq__(self, other):
         return self.chunks == other
 
+    def __iter__(self):
+        for chunk in self.chunks:
+            yield chunk
+
+    def __getitem__(self, n):
+        return self.chunks[n]
+
 @dataclass
 class UnsolicitedResultCode(Response):
     code: bytes

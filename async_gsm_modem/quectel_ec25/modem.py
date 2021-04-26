@@ -4,51 +4,46 @@ from ..base.pdu import encodeSmsSubmitPdu, encodeGsm7
 from .sms import SMS
 from .constants import STATUS_MAP, DELETE_FLAG, UNSOLICITED_RESULT_CODES
 from typing import List, Type
-
-class ProductInfo:
-
-    def __init__(self, manufacturer, model, revision):
-        self.manufacturer = manufacturer
-        self.model = model
-        self.revision = revision
-
-    def __str__(self):
-        return f'{self.manufacturer} {self.model} {self.revision}'
-
-    def to_dict(self):
-        return vars(self)
+from .info import ProductInfo
+import logging
 
 class Modem(ATModem):
 
     def __init__(self, device: str, baud_rate: int):
         super().__init__(device, baud_rate, UNSOLICITED_RESULT_CODES)
 
-    async def initialize(self):
-        await self.ping()
+        self.logger = logging.getLogger('QuectelEC25Modem')
 
     async def ping(self):
         response = await self.send_command(Command(b'AT'))
-        return response == [b'AT', b'OK']
+        return response == [b'OK']
 
     async def product_info(self) -> ProductInfo:
-        responses = await self.send_command(Command(b'ATI'))
-        return ProductInfo(*[r.response.decode() for r in responses[1:4]])
+        response = await self.send_command(Command(b'ATI'))
+        response = [r.decode() for r in response]
+        return ProductInfo(
+            manufacturer=response[0],
+            model=response[1],
+            revision=response[2].replace('Revision: ', '')
+        )
 
     async def imei(self):
-        responses = await self.send_command(Command(b'AT+GSN'))
-        return bytes(responses[1]).decode()
+        response = await self.send_command(Command(b'AT+GSN'))
+        return response[0].decode()
 
     async def imsi(self):
-        responses = await self.send_command(Command(b'AT+CIMI'))
-        return bytes(responses[1]).decode()
+        response = await self.send_command(Command(b'AT+CIMI'))
+        return response[0].decode()
 
     async def number(self):
-        responses = await self.send_command(Command(b'AT+CNUM'))
-        return bytes(responses[1]).decode()
+        response = await self.send_command(Command(b'AT+CNUM'))
+        response = response[0].decode()
+        number = response.split(',')[1].replace('"','')
+        return number
 
     async def read_message(self, index: int) -> SMS:
         command = ExtendedCommand(b'AT+CMGR').write(str(index).encode())
-        responses = await self.send_command(command)
+        response = await self.send_command(command)
         if b'+CMGR' not in bytes(responses[1]):
             self.logger.debug(f'Message does not exist at index {index}')
             return None
