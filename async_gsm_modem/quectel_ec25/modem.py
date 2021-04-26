@@ -20,14 +20,15 @@ class ProductInfo:
 
 class Modem(ATModem):
 
-    def __init__(self, device:str, baud_rate: int):
+    def __init__(self, device: str, baud_rate: int):
         super().__init__(device, baud_rate, UNSOLICITED_RESULT_CODES)
 
     async def initialize(self):
         await self.ping()
 
     async def ping(self):
-        await self.send_command(Command(b'AT'))
+        response = await self.send_command(Command(b'AT'))
+        return response == [b'AT', b'OK']
 
     async def product_info(self) -> ProductInfo:
         responses = await self.send_command(Command(b'ATI'))

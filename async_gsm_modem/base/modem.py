@@ -13,9 +13,10 @@ class ATModem:
     RESP_TERMINATOR = b'OK'
     CMD_TERMINATOR = b'\r'
 
-    def __init__(self, device: str, baud_rate: int, urc: List[Tuple[str, int]] = None):
+    def __init__(self, device: str, baud_rate: int, urc: List[Tuple[str, int]] = None, echo: bool = False):
         self.device = device
         self.baud_rate = baud_rate
+        self.echo = echo
 
         self.urc = urc if urc else []
         self.urc_buffer = []
@@ -32,6 +33,8 @@ class ATModem:
             baudrate=self.baud_rate
         )
         self.at_logger.debug(f'Connected to {self.device}')
+        await self.send_command(Command(b'AT'))
+        await self.send_command(Command(b'ATE'+str(int(self.echo)).encode()))
         self.start_read_loop()
         self.start_urc_handler_loop()
 
@@ -42,8 +45,8 @@ class ATModem:
         await self.writer.wait_closed()
 
     async def lock(self):
-        await self.stop_read_loop()
         await self._lock.acquire()
+        await self.stop_read_loop()
         self.at_logger.debug('Locked')
 
     def unlock(self):
@@ -69,7 +72,9 @@ class ATModem:
         try:
             await self.lock()
             await self.write(command)
-            return await asyncio.wait_for(self.read_response(), timeout)
+            response = await asyncio.wait_for(self.read_response(), timeout)
+            self.at_logger.debug(response)
+            return response
         except Exception as e:
             self.at_logger.error(f'Failed to send command: {command}', exc_info=True)
             return []
@@ -81,9 +86,9 @@ class ATModem:
         terminator = terminator if terminator else self.RESP_TERMINATOR
         response_chunks = []
         while True:
-            response_chunk = await self.read(seperator, timeout)
-
-            if not response_chunk:
+            try:
+                response_chunk = await self.read(seperator, timeout)
+            except asyncio.TimeoutError:
                 break
 
             # if URC was received read it out and push to urc buffer then continue processing expected response
@@ -99,16 +104,14 @@ class ATModem:
                     continue
                 except:
                     self.at_logger.error('URC was received but failed to process', exc_info=True)
-            else:
+            elif response_chunk:
                 response_chunks.append(response_chunk)
 
             if response_chunk == terminator:
                 break
 
         if response_chunks:
-            response = Response(response_chunks)
-            self.at_logger.debug(response)
-            return response
+            return Response(response_chunks)
         else:
             return
 
@@ -143,6 +146,8 @@ class ATModem:
         while True:
             try:
                 response = await self.read_response()
+                if response:
+                    self.at_logger.warn(f'Unexpected response received: {response}')
             except asyncio.TimeoutError:
                 pass
             except asyncio.CancelledError:
