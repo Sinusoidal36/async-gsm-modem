@@ -64,6 +64,8 @@ class Modem(ATModem):
     async def read_message(self, index: int) -> SMS:
         command = ExtendedCommand(b'AT+CMGR').write(str(index).encode())
         response = await self.send_command(command)
+        if not response or b'+CMGR' not in response[0]:
+            return None
 
         status, alpha, length = response[0].replace(b'+CMGR: ', b'').split(b',')
         pdu = response[1]
@@ -101,6 +103,7 @@ class Modem(ATModem):
         messages = []
         for n in range(len(parts)//2):
             try:
+                message_info = parts[n*2]
                 index, status, alpha, length = message_info.replace(b'+CMGL: ', b'').split(b',')
                 pdu = parts[(n*2)+1]
                 message = self.parse_message(index, status, alpha, length, pdu)

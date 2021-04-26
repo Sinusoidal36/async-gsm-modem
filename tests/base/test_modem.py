@@ -24,10 +24,6 @@ class DummyWriter:
     async def wait_closed(self, *args, **kwargs):
         pass
 
-def response_generator(response, *args, **kwargs):
-    for v in response:
-        yield v
-
 @pytest.fixture(autouse=True)
 def mock_serial_connection(mocker):
     mocker.patch.object(serial_asyncio, 'open_serial_connection', return_value=(DummyReader(), DummyWriter()))
@@ -35,6 +31,7 @@ def mock_serial_connection(mocker):
 @pytest.fixture
 async def mock_modem(mocker):
     mocker.patch.object(ATModem, 'start_read_loop', return_value=None)
+    mocker.patch.object(ATModem, 'initialize', return_value=None)
     modem = ATModem('/dev/ttyXRUSB2', 115200)
     modem.at_logger.setLevel(logging.DEBUG)
     await modem.connect()
@@ -48,6 +45,7 @@ def test_init():
 @pytest.mark.asyncio
 async def test_connect(mocker):
     mocker.patch.object(ATModem, 'start_read_loop', return_value=None)
+    mocker.patch.object(ATModem, 'initialize', return_value=None)
     modem = ATModem('/dev/ttyXRUSB2', 115200)
     await modem.connect()
     assert modem.reader

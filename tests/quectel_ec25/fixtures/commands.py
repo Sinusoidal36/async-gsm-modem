@@ -5,7 +5,7 @@ from async_gsm_modem.base.command import Command, ExtendedCommand
 def command_at():
     return (Command(b'AT'), [b'OK'])
 
-@pytest.fixture(params[
+@pytest.fixture(params=[
     (b'AT', [b'OK']),
     (b'ATI', [b'Quectel', b'EC25', b'Revision: EC25AFFAR07A08M4G', b'OK']),
     (b'AT+GMI', [b'Quectel', b'OK']),
