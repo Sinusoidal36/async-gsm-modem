@@ -22,6 +22,11 @@ DELETE_FLAG = {
     'ALL': b'4'
 }
 
+ERROR_CODES = [
+    b'+CMS ERROR',
+    b'+CME ERROR'
+]
+
 # EC25 URC codes with the corresponding chunk count
 UNSOLICITED_RESULT_CODES = [
     (b'+CREG', 1),

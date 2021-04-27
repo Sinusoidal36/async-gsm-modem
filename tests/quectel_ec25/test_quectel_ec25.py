@@ -75,6 +75,14 @@ async def test_read_message_no_message(mocker, modem):
     assert not message
 
 @pytest.mark.asyncio
+async def test_read_message_error(mocker, modem):
+    expected_response = [b'ERROR']
+    mocker.patch.object(DummyReader, 'readuntil', side_effect=expected_response)
+
+    message = await modem.read_message(0)
+    assert not message
+
+@pytest.mark.asyncio
 async def test_list_messages(mocker, modem):
     expected_response = [b'+CMGL: 0,0,,23', b'07912160130350F7040B912108378482F500001240625104958A04D4F29C0E', b'+CMGL: 1,0,,23', b'07912160130350F7040B912108378482F500001240625104958A04D4F29C0E', b'OK']
     mocker.patch.object(DummyReader, 'readuntil', side_effect=expected_response)

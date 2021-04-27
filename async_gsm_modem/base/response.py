@@ -28,6 +28,3 @@ class Response:
 @dataclass
 class UnsolicitedResultCode(Response):
     code: bytes
-
-class ErrorResponse(Response):
-    pass

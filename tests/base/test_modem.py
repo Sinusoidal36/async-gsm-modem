@@ -90,3 +90,12 @@ async def test_send_command_with_urc(mocker, mock_modem, generic_test_command):
     response = await mock_modem.send_command(command, timeout=1)
     assert response == expected_response
     assert mock_modem.urc_buffer
+
+@pytest.mark.asyncio
+async def test_send_command_with_error(mocker, mock_modem, generic_test_command):
+    command, expected_response = generic_test_command
+    expected_response = [b'ERROR']
+    mocker.patch.object(DummyReader, 'readuntil', side_effect=expected_response)
+
+    response = await mock_modem.send_command(command, timeout=1)
+    assert response is None

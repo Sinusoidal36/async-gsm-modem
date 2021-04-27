@@ -6,20 +6,27 @@ import serial_asyncio
 from typing import Type, Callable, List, Tuple
 from .command import Command
 from .response import Response, UnsolicitedResultCode
+from .exceptions import CommandError
 import logging
+import re
+
+AT_PATTERN = re.compile(b'^AT(\+[^?=]+)[?=]{1}')
 
 class ATModem:
 
     RESP_SEPERATOR = b'\r\n'
     RESP_TERMINATOR = b'OK'
     CMD_TERMINATOR = b'\r'
+    ERROR_TERMINATOR = b'ERROR'
 
-    def __init__(self, device: str, baud_rate: int, urc: List[Tuple[str, int]] = None):
+    def __init__(self, device: str, baud_rate: int, urc: List[Tuple[bytes, int]] = None, error_codes: List[bytes] = None):
         self.device = device
         self.baud_rate = baud_rate
 
         self.urc = urc if urc else []
         self.urc_buffer = []
+
+        self.error_codes = error_codes if error_codes else []
 
         self.write_lock = asyncio.Lock()
         self.read_lock = asyncio.Lock()
@@ -80,20 +87,22 @@ class ATModem:
                 await self.cancel_read()
 
                 await self.write(command)
-                response = await self.read_response(timeout=timeout)
+                extended_command = AT_PATTERN.match(bytes(command))
+                expected_response = extended_command.group(1) if extended_command else None
+                response = await self.read_response(expected_response=expected_response, timeout=timeout)
                 self.at_logger.debug(response)
                 return response
         except TimeoutError:
             self.at_logger.error(f'Response timed out sending: {command}')
-            return []
         except CancelledError:
             self.at_logger.debug(f'Command cancelled: {command}', exc_info=True)
             raise
+        except CommandError as e:
+            self.at_logger.error(f'Command {command} received error response: {e.error}')
         except Exception as e:
             self.at_logger.error(f'Failed to send command: {command}', exc_info=True)
-            return []
 
-    async def read_response(self, seperator: bytes = None, terminator: bytes = None, timeout: int = 5) -> Response:
+    async def read_response(self, expected_response: bytes = None, seperator: bytes = None, terminator: bytes = None, timeout: int = 5) -> Response:
         seperator = seperator if seperator else self.RESP_SEPERATOR
         terminator = terminator if terminator else self.RESP_TERMINATOR
         response_chunks = []
@@ -105,9 +114,14 @@ class ATModem:
             except CancelledError:
                 raise
 
+            error_code = next(filter(lambda error_code: response_chunk.startswith(error_code), self.error_codes), None)
+            if error_code or response_chunk == self.ERROR_TERMINATOR:
+                raise CommandError(error=response_chunk)
+
             # if URC was received read it out and push to urc buffer then continue processing expected response
             urc = next(filter(lambda x: response_chunk.startswith(x[0]), self.urc), None)
-            if urc:
+            expected = response_chunk.startswith(expected_response) if expected_response else False
+            if urc and not expected:
                 try:
                     code, n_chunks = urc
                     self.at_logger.debug(f'Received URC: {code}')
