@@ -3,6 +3,7 @@ import logging
 from async_gsm_modem.base.modem import ATModem
 from async_gsm_modem.base.command import Command
 from async_gsm_modem.base.response import Response
+from async_gsm_modem.base.exceptions import *
 import asyncio
 import serial_asyncio
 
@@ -54,6 +55,15 @@ async def test_connect(mocker):
     await modem.close()
 
 @pytest.mark.asyncio
+async def test_connect_fail(mocker):
+    mocker.patch.object(ATModem, 'start_read_loop', return_value=None)
+    mocker.patch.object(ATModem, 'read', side_effect=asyncio.TimeoutError)
+
+    with pytest.raises(ModemConnectionError):
+        modem = ATModem('/dev/ttyXRUSB2', 115200)
+        await modem.connect()
+        
+@pytest.mark.asyncio
 async def test_read(mocker, mock_modem):
     mocker.patch.object(DummyReader, 'readuntil', return_value=b'OK\r\n')
     response = await mock_modem.read()
@@ -66,11 +76,8 @@ async def test_read_timeout(mocker, mock_modem):
         return b'OK\r\n'
     mocker.patch.object(DummyReader, 'readuntil', side_effect=sleep)
     exception = None
-    try:
+    with pytest.raises(asyncio.TimeoutError):
         response = await mock_modem.read(timeout=0)
-    except Exception as e:
-        exception = e
-    assert isinstance(exception, asyncio.TimeoutError)
 
 @pytest.mark.asyncio
 async def test_send_command(mocker, mock_modem, generic_test_command):
@@ -98,5 +105,5 @@ async def test_send_command_with_error(mocker, mock_modem, generic_test_command)
     expected_response = [b'ERROR']
     mocker.patch.object(DummyReader, 'readuntil', side_effect=expected_response + [terminator])
 
-    response = await mock_modem.send_command(command, response_terminator=terminator, timeout=1)
-    assert response is None
+    with pytest.raises(CommandFailed):
+        response = await mock_modem.send_command(command, response_terminator=terminator, timeout=1)
