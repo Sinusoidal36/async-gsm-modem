@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="async-gsm-modem",
-    version="0.0.1",
+    version="0.0.2",
     author="sinusoidal",
     author_email="",
     description="An async GSM modem driver library",
