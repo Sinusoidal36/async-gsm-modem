@@ -3,6 +3,8 @@ import logging
 from async_gsm_modem.quectel_ec25.modem import Modem
 from async_gsm_modem.quectel_ec25.info import ProductInfo
 from async_gsm_modem.base.command import Command, ExtendedCommand
+from async_gsm_modem.base.exceptions import *
+from async_gsm_modem.quectel_ec25.exceptions import *
 import asyncio
 import serial_asyncio
 
@@ -78,8 +80,8 @@ async def test_read_message_error(mocker, modem):
     expected_response = [b'+CMS ERROR: 300']
     mocker.patch.object(DummyReader, 'readuntil', side_effect=expected_response)
 
-    message = await modem.read_message(0)
-    assert not message
+    with pytest.raises(ReadMessageError):
+        message = await modem.read_message(0)
 
 @pytest.mark.asyncio
 async def test_list_messages(mocker, modem):
