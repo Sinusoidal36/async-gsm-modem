@@ -22,29 +22,35 @@ DELETE_FLAG = {
     'ALL': b'4'
 }
 
+ERROR_CODES = [
+    b'+CMS ERROR',
+    b'+CME ERROR'
+]
+
+# EC25 URC codes with the corresponding chunk count
 UNSOLICITED_RESULT_CODES = [
-    b'+CREG',
-    b'+CGREG',
-    b'+CTZV',
-    b'+CTZE',
-    b'+CMTI',
-    b'+CMT',
-    b'^HCMT',
-    b'+CBM',
-    b'+CDS',
-    b'+CDSI',
-    b'^HCDS',
-    b'+COLP',
-    b'+CLIP',
-    b'+CRING',
-    b'+CCWA',
-    b'+CSSI',
-    b'+CSSU',
-    b'+CUSD',
-    b'RDY',
-    b'+CFUN',
-    b'+CPIN',
-    b'+QIND',
-    b'POWERED DOWN',
-    b'+CGEV'
+    (b'+CREG', 1),
+    (b'+CGREG', 1),
+    (b'+CTZV', 1),
+    (b'+CTZE', 1),
+    (b'+CMTI', 1),
+    (b'+CMT', 2),
+    (b'^HCMT', 2),
+    (b'+CBM', 2),
+    (b'+CDS', 1),
+    (b'+CDSI', 1),
+    (b'^HCDS', 2),
+    (b'+COLP', 1),
+    (b'+CLIP', 1),
+    (b'+CRING', 1),
+    (b'+CCWA', 1),
+    (b'+CSSI', 1),
+    (b'+CSSU', 1),
+    (b'+CUSD', 1),
+    (b'RDY', 1),
+    (b'+CFUN', 1),
+    (b'+CPIN', 1),
+    (b'+QIND', 1),
+    (b'POWERED DOWN', 1),
+    (b'+CGEV', 1)
 ]

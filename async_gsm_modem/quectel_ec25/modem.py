@@ -1,51 +1,77 @@
 from ..base.modem import ATModem
+from ..base.response import Response
 from ..base.command import Command, ExtendedCommand
 from ..base.pdu import encodeSmsSubmitPdu, encodeGsm7
 from .sms import SMS
-from .constants import STATUS_MAP, DELETE_FLAG, UNSOLICITED_RESULT_CODES
+from .constants import STATUS_MAP, STATUS_MAP_R, DELETE_FLAG, UNSOLICITED_RESULT_CODES
 from typing import List, Type
-
-class ProductInfo:
-
-    def __init__(self, manufacturer, model, revision):
-        self.manufacturer = manufacturer
-        self.model = model
-        self.revision = revision
-
-    def __str__(self):
-        return f'{self.manufacturer} {self.model} {self.revision}'
-
-    def to_dict(self):
-        return vars(self)
+from .info import ProductInfo
+import logging
+from io import StringIO
+from smspdu.fields import SMSDeliver
 
 class Modem(ATModem):
 
-    def __init__(self, device:str, baud_rate: int):
+    def __init__(self, device: str, baud_rate: int):
         super().__init__(device, baud_rate, UNSOLICITED_RESULT_CODES)
 
-    async def initialize(self):
-        await self.ping()
+        self.logger = logging.getLogger('QuectelEC25Modem')
 
     async def ping(self):
-        await self.send_command(Command(b'AT'))
+        response = await self.send_command(Command(b'AT'))
+        return response == Response([])
 
-    async def product_info(self) -> Type[ProductInfo]:
-        responses = await self.send_command(Command(b'ATI'))
-        return ProductInfo(*[r.response.decode() for r in responses[1:4]])
+    async def product_info(self) -> ProductInfo:
+        response = await self.send_command(Command(b'ATI'))
+        response = [r.decode() for r in response]
+        return ProductInfo(
+            manufacturer=response[0],
+            model=response[1],
+            revision=response[2].replace('Revision: ', '')
+        )
 
     async def imei(self):
-        responses = await self.send_command(Command(b'AT+GSN'))
-        return bytes(responses[1]).decode()
+        response = await self.send_command(Command(b'AT+GSN'))
+        return response[0].decode()
 
-    async def read_message(self, index: int) -> Type[SMS]:
+    async def imsi(self):
+        response = await self.send_command(Command(b'AT+CIMI'))
+        return response[0].decode()
+
+    async def number(self):
+        response = await self.send_command(Command(b'AT+CNUM'))
+        response = response[0].decode()
+        number = response.split(',')[1].replace('"','')
+        return number
+
+    def parse_message(self, index, status, alpha, length, pdu) -> SMS:
+        data = SMSDeliver.decode(StringIO(pdu.decode()))
+
+        text = str(data['user_data']['data'])
+        from_number = data['sender']['number']
+        date = data['scts']
+
+        return SMS(
+            index=index,
+            status=status,
+            alpha=alpha,
+            length=length,
+            pdu=pdu,
+            text=text,
+            from_number=from_number,
+            date=date
+        )
+    
+    async def read_message(self, index: int) -> SMS:
         command = ExtendedCommand(b'AT+CMGR').write(str(index).encode())
-        responses = await self.send_command(command)
-        if b'+CMGR' not in bytes(responses[1]):
-            self.logger.debug(f'Message does not exist at index {index}')
+        response = await self.send_command(command)
+        if not response:
             return None
-        status, alpha, length = bytes(responses[1]).lstrip(b'+CMGR: ').split(b',')
 
-        return SMS(index, status, alpha, length, bytes(responses[2]))
+        status, alpha, length = response[0].replace(b'+CMGR: ', b'').split(b',')
+        pdu = response[1]
+
+        return self.parse_message(index, status, alpha, length, pdu)
 
     async def send_message(self, to_number: str, text: str, timeout: int = 5):
         pdus = encodeSmsSubmitPdu(to_number, text)
@@ -55,28 +81,36 @@ class Modem(ATModem):
             length = str(pdu[1]).encode()
             command = ExtendedCommand(b'AT+CMGS').write(length)
             await self.write(command)
-            await self.read(terminator=bytes(command)) # read out and discard command echo
-            await self.read(seperator=b'> ', terminator=b'') # read out and discard prompt
+            await self.read_response(terminator=bytes(command)) # read out and discard command echo
+            await self.read_response(seperator=b'> ', terminator=b'') # read out and discard prompt
             command = ExtendedCommand(pdu[0].hex().upper().encode()).execute()
             await self.write(command, terminator=chr(26).encode()) # send pdu with CTRL-Z terminator
-            responses += await self.read(timeout=timeout)
+            responses.append(await self.read_response(timeout=timeout))
         self.unlock()
         return responses
 
     async def list_messages(self, status: str = 'ALL') -> List[SMS]:
-        assert status in STATUS_MAP, \
-            KeyError(f'Invalid status {status}: {tuple(STATUS_MAP.keys())}')
+        if status not in STATUS_MAP:
+            raise ValueError(f'Invalid status {status}: {tuple(STATUS_MAP.keys())}')
         status = STATUS_MAP[status]
 
         command = ExtendedCommand(b'AT+CMGL').write(status)
-        responses = await self.send_command(command)
-        responses = responses[1:-2]
+        response = await self.send_command(command)
+        parts = [part for part in response]
+        
+        if len(parts)%2 > 0:
+            raise ValueError(f'Expecting even number of parts in response: {response}')
 
         messages = []
-        for n in range(len(responses)//2):
-            index, status, alpha, length = bytes(responses[n*2]).lstrip(b'+CMGL: ').split(b',')
-            pdu = bytes(responses[(n*2)+1])
-            messages.append(SMS(index, status, alpha, length, pdu))
+        for n in range(len(parts)//2):
+            try:
+                message_info = parts[n*2]
+                index, status, alpha, length = message_info.replace(b'+CMGL: ', b'').split(b',')
+                pdu = parts[(n*2)+1]
+                message = self.parse_message(index, status, alpha, length, pdu)
+                messages.append(message)
+            except:
+                self.logger.error(f'Failed to parse message: {parts[(n*2):(n*2)+1]}', exc_info=True)
 
         return messages
 

@@ -1,2 +1,5 @@
 pyserial-asyncio
 smspdudecoder
+pydantic
+pytest
+pytest-asyncio
