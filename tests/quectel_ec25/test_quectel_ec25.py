@@ -76,7 +76,7 @@ async def test_read_message_no_message(mocker, modem):
 
 @pytest.mark.asyncio
 async def test_read_message_error(mocker, modem):
-    expected_response = [b'ERROR']
+    expected_response = [b'+CMS ERROR: 300']
     mocker.patch.object(DummyReader, 'readuntil', side_effect=expected_response)
 
     message = await modem.read_message(0)
