@@ -96,21 +96,22 @@ class Modem(ATModem):
 
         command = ExtendedCommand(b'AT+CMGL').write(status)
         response = await self.send_command(command)
-        parts = [part for part in response]
+        if response is None:
+            return
         
-        if len(parts)%2 > 0:
+        if len(response)%2 > 0:
             raise ValueError(f'Expecting even number of parts in response: {response}')
 
         messages = []
-        for n in range(len(parts)//2):
+        for n in range(len(response)//2):
             try:
-                message_info = parts[n*2]
+                message_info = response[n*2]
                 index, status, alpha, length = message_info.replace(b'+CMGL: ', b'').split(b',')
-                pdu = parts[(n*2)+1]
+                pdu = response[(n*2)+1]
                 message = self.parse_message(index, status, alpha, length, pdu)
                 messages.append(message)
             except:
-                self.logger.error(f'Failed to parse message: {parts[(n*2):(n*2)+1]}', exc_info=True)
+                self.logger.error(f'Failed to parse message: {response[(n*2):(n*2)+1]}', exc_info=True)
 
         return messages
 
