@@ -1,4 +1,5 @@
 from ..base.modem import ATModem
+from ..base.response import Response
 from ..base.command import Command, ExtendedCommand
 from ..base.pdu import encodeSmsSubmitPdu, encodeGsm7
 from .sms import SMS
@@ -18,7 +19,7 @@ class Modem(ATModem):
 
     async def ping(self):
         response = await self.send_command(Command(b'AT'))
-        return response == [b'OK']
+        return response == Response([])
 
     async def product_info(self) -> ProductInfo:
         response = await self.send_command(Command(b'ATI'))
@@ -64,7 +65,7 @@ class Modem(ATModem):
     async def read_message(self, index: int) -> SMS:
         command = ExtendedCommand(b'AT+CMGR').write(str(index).encode())
         response = await self.send_command(command)
-        if not response or b'+CMGR' not in response[0]:
+        if not response:
             return None
 
         status, alpha, length = response[0].replace(b'+CMGR: ', b'').split(b',')
@@ -95,7 +96,7 @@ class Modem(ATModem):
 
         command = ExtendedCommand(b'AT+CMGL').write(status)
         response = await self.send_command(command)
-        parts = [part for part in response][:-1]
+        parts = [part for part in response]
         
         if len(parts)%2 > 0:
             raise ValueError(f'Expecting even number of parts in response: {response}')

@@ -45,8 +45,7 @@ def test_init():
 
 @pytest.mark.asyncio
 async def test_ping(mocker, modem):
-    expected_response = [b'OK']
-    mocker.patch.object(DummyReader, 'readuntil', side_effect=expected_response)
+    mocker.patch.object(DummyReader, 'readuntil', side_effect=[b'OK'])
 
     assert await modem.ping()
 

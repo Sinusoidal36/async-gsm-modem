@@ -10,7 +10,7 @@ from .exceptions import CommandError
 import logging
 import re
 
-AT_PATTERN = re.compile(b'^AT(\+[^?=]+)[?=]{1}')
+AT_PATTERN = re.compile(br'^AT(\+[^?=]+)[?=]{1}')
 
 class ATModem:
 
@@ -80,7 +80,7 @@ class ATModem:
             except CancelledError:
                 return
 
-    async def send_command(self, command: Command, timeout: int = 5) -> List[bytes]:
+    async def send_command(self, command: Command, response_terminator: bytes = None, timeout: int = 5) -> List[bytes]:
         try:
             async with self.write_lock:
                 # if we acquire a write lock but have a read going, cancel it
@@ -89,7 +89,7 @@ class ATModem:
                 await self.write(command)
                 extended_command = AT_PATTERN.match(bytes(command))
                 expected_response = extended_command.group(1) if extended_command else None
-                response = await self.read_response(expected_response=expected_response, timeout=timeout)
+                response = await self.read_response(expected_response=expected_response, terminator=response_terminator, timeout=timeout)
                 self.at_logger.debug(response)
                 return response
         except TimeoutError:
@@ -107,12 +107,7 @@ class ATModem:
         terminator = terminator if terminator else self.RESP_TERMINATOR
         response_chunks = []
         while True:
-            try:
-                response_chunk = await self.read(seperator, timeout)
-            except TimeoutError:
-                break
-            except CancelledError:
-                raise
+            response_chunk = await self.read(seperator, timeout)
 
             error_code = next(filter(lambda error_code: response_chunk.startswith(error_code), self.error_codes), None)
             if error_code or response_chunk == self.ERROR_TERMINATOR:
@@ -127,27 +122,19 @@ class ATModem:
                     self.at_logger.debug(f'Received URC: {code}')
                     urc_chunks = [response_chunk]
                     for n in range(n_chunks - 1):
-                        urc_chunks.append(await self.read())
+                        urc_chunks.append(await self.read(seperator))
                     self.urc_buffer.append(UnsolicitedResultCode(chunks=urc_chunks, code=code))
-                    continue
-                except CancelledError:
+                except (CancelledError, TimeoutError):
                     raise
-                except TimeoutError:
-                    break
                 except:
                     self.at_logger.error('URC was received but failed to process', exc_info=True)
+                    raise
+            elif response_chunk is None or response_chunk == terminator:
+                break
             elif response_chunk:
                 response_chunks.append(response_chunk)
-            elif response_chunk is None:
-                break
 
-            if response_chunk == terminator:
-                break
-
-        if response_chunks:
-            return Response(response_chunks)
-        else:
-            return
+        return Response(response_chunks)
 
     async def urc_handler_loop(self) -> None:
         while True:

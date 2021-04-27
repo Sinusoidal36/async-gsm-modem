@@ -1,5 +1,5 @@
 from datetime import datetime
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List
 
 @dataclass
@@ -21,6 +21,12 @@ class Response:
     def __iter__(self):
         for chunk in self.chunks:
             yield chunk
+
+    def __len__(self):
+        return len(self.chunks)
+
+    def __nonzero__(self):
+        return len(self.chunks) > 0
 
     def __getitem__(self, n):
         return self.chunks[n]
