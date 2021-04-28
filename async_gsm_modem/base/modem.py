@@ -105,7 +105,11 @@ class ATModem:
         terminator = terminator if terminator else self.RESP_TERMINATOR
         response_chunks = []
         while True:
-            response_chunk = await self.read(seperator, timeout)
+            try:
+                response_chunk = await self.read(seperator, timeout)
+            except:
+                self.at_logger.debug(f'Read error, partial response: {response_chunks}')
+                raise
 
             error_code = next(filter(lambda error_code: response_chunk.startswith(error_code), self.error_codes), None)
             if error_code or response_chunk == self.ERROR_TERMINATOR:

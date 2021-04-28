@@ -79,22 +79,22 @@ class Modem(ATModem):
         else:
             return
 
-    async def send_message(self, to_number: str, text: str, timeout: int = 5):
+    async def send_message(self, to_number: str, text: str, timeout: int = 5) -> None:
         try:
             pdus = encodeSmsSubmitPdu(to_number, text)
-            responses = []
-            await self.lock()
-            for pdu in pdus:
-                length = str(pdu[1]).encode()
-                command = ExtendedCommand(b'AT+CMGS').write(length)
-                await self.write(command)
-                await self.read_response(terminator=bytes(command)) # read out and discard command echo
-                await self.read_response(seperator=b'> ', terminator=b'') # read out and discard prompt
-                command = ExtendedCommand(pdu[0].hex().upper().encode()).execute()
-                await self.write(command, terminator=chr(26).encode()) # send pdu with CTRL-Z terminator
-                responses.append(await self.read_response(timeout=timeout))
-            self.unlock()
-            return responses
+            message_references = []
+            async with self.write_lock:
+                for pdu in pdus:
+                    length = str(pdu[1]).encode()
+                    command = ExtendedCommand(b'AT+CMGS').write(length)
+                    await self.write(command)
+                    await self.read(seperator=b'> ') # read out and discard prompt
+                    command = ExtendedCommand(pdu[0].hex().upper().encode()).execute()
+                    await self.write(command, terminator=chr(26).encode()) # send pdu with CTRL-Z terminator
+                    response = await self.read_response(expected_response=b'+CMGS', timeout=timeout)
+                    self.at_logger.debug(response)
+                    message_references.append(response[0].replace(b'+CMGS: ', b'').decode())
+            return message_references
         except Exception as e:
             self.logger.error('Failed to send message', exc_info=True)
             raise SendMessageError from e
