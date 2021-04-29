@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="async-gsm-modem",
-    version="0.0.2",
+    version="0.1.0",
     author="sinusoidal",
     author_email="",
     description="An async GSM modem driver library",
@@ -19,5 +19,5 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.6',
-    install_requires=['pyserial-asyncio', 'smspdudecoder']
+    install_requires=['pyserial-asyncio', 'smspdudecoder','pydantic']
 )
