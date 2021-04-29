@@ -3,6 +3,8 @@ import logging
 from async_gsm_modem.quectel_ec25.modem import Modem
 from async_gsm_modem.quectel_ec25.info import ProductInfo
 from async_gsm_modem.base.command import Command, ExtendedCommand
+from async_gsm_modem.base.exceptions import *
+from async_gsm_modem.quectel_ec25.exceptions import *
 import asyncio
 import serial_asyncio
 
@@ -78,8 +80,8 @@ async def test_read_message_error(mocker, modem):
     expected_response = [b'+CMS ERROR: 300']
     mocker.patch.object(DummyReader, 'readuntil', side_effect=expected_response)
 
-    message = await modem.read_message(0)
-    assert not message
+    with pytest.raises(ReadMessageError):
+        message = await modem.read_message(0)
 
 @pytest.mark.asyncio
 async def test_list_messages(mocker, modem):
@@ -97,3 +99,20 @@ async def test_list_messages_no_messages(mocker, modem):
     messages = await modem.list_messages()
     assert isinstance(messages, list)
     assert not messages
+
+@pytest.mark.asyncio
+async def test_send_message(mocker, modem):
+    expected_response = [b'> ', b'+CMGS: 245', b'OK']
+    mocker.patch.object(DummyReader, 'readuntil', side_effect=expected_response)
+
+    message_references = await modem.send_message('TEST_NUMBER', 'TEST MESSAGE')
+    assert message_references == ['245']
+
+@pytest.mark.asyncio
+async def test_send_message_concatenated(mocker, modem):
+    expected_response = [b'> ', b'+CMGS: 245', b'OK', b'> ', b'+CMGS: 246', b'OK']
+    mocker.patch.object(DummyReader, 'readuntil', side_effect=expected_response)
+    text = 'TEST MESSAGE ' * 14
+
+    message_references = await modem.send_message('TEST_NUMBER', text)
+    assert message_references == ['245', '246']

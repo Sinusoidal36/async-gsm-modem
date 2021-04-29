@@ -3,6 +3,7 @@ from ..base.response import Response
 from ..base.command import Command, ExtendedCommand
 from ..base.pdu import encodeSmsSubmitPdu, encodeGsm7
 from .sms import SMS
+from .exceptions import *
 from .constants import STATUS_MAP, STATUS_MAP_R, DELETE_FLAG, UNSOLICITED_RESULT_CODES
 from typing import List, Type
 from .info import ProductInfo
@@ -63,56 +64,68 @@ class Modem(ATModem):
         )
     
     async def read_message(self, index: int) -> SMS:
-        command = ExtendedCommand(b'AT+CMGR').write(str(index).encode())
-        response = await self.send_command(command)
-        if not response:
-            return None
+        try:
+            command = ExtendedCommand(b'AT+CMGR').write(str(index).encode())
+            response = await self.send_command(command)
+        except Exception as e:
+            self.logger.error('Failed to read message', exc_info=True)
+            raise ReadMessageError from e
+        
+        if response:
+            status, alpha, length = response[0].replace(b'+CMGR: ', b'').split(b',')
+            pdu = response[1]
 
-        status, alpha, length = response[0].replace(b'+CMGR: ', b'').split(b',')
-        pdu = response[1]
+            return self.parse_message(index, status, alpha, length, pdu)
+        else:
+            return
 
-        return self.parse_message(index, status, alpha, length, pdu)
-
-    async def send_message(self, to_number: str, text: str, timeout: int = 5):
-        pdus = encodeSmsSubmitPdu(to_number, text)
-        responses = []
-        await self.lock()
-        for pdu in pdus:
-            length = str(pdu[1]).encode()
-            command = ExtendedCommand(b'AT+CMGS').write(length)
-            await self.write(command)
-            await self.read_response(terminator=bytes(command)) # read out and discard command echo
-            await self.read_response(seperator=b'> ', terminator=b'') # read out and discard prompt
-            command = ExtendedCommand(pdu[0].hex().upper().encode()).execute()
-            await self.write(command, terminator=chr(26).encode()) # send pdu with CTRL-Z terminator
-            responses.append(await self.read_response(timeout=timeout))
-        self.unlock()
-        return responses
+    async def send_message(self, to_number: str, text: str, timeout: int = 5) -> None:
+        try:
+            pdus = encodeSmsSubmitPdu(to_number, text)
+            message_references = []
+            async with self.write_lock:
+                for pdu in pdus:
+                    length = str(pdu[1]).encode()
+                    command = ExtendedCommand(b'AT+CMGS').write(length)
+                    await self.write(command)
+                    await self.read(seperator=b'> ') # read out and discard prompt
+                    command = ExtendedCommand(pdu[0].hex().upper().encode()).execute()
+                    await self.write(command, terminator=chr(26).encode()) # send pdu with CTRL-Z terminator
+                    response = await self.read_response(expected_response=b'+CMGS', timeout=timeout)
+                    self.at_logger.debug(response)
+                    message_references.append(response[0].replace(b'+CMGS: ', b'').decode())
+            return message_references
+        except Exception as e:
+            self.logger.error('Failed to send message', exc_info=True)
+            raise SendMessageError from e
 
     async def list_messages(self, status: str = 'ALL') -> List[SMS]:
         if status not in STATUS_MAP:
             raise ValueError(f'Invalid status {status}: {tuple(STATUS_MAP.keys())}')
         status = STATUS_MAP[status]
 
-        command = ExtendedCommand(b'AT+CMGL').write(status)
-        response = await self.send_command(command)
-        parts = [part for part in response]
-        
-        if len(parts)%2 > 0:
-            raise ValueError(f'Expecting even number of parts in response: {response}')
+        try:
+            command = ExtendedCommand(b'AT+CMGL').write(status)
+            response = await self.send_command(command)
+            
+            if len(response)%2 > 0:
+                raise ValueError(f'Expecting even number of parts in response: {response}')
 
-        messages = []
-        for n in range(len(parts)//2):
-            try:
-                message_info = parts[n*2]
-                index, status, alpha, length = message_info.replace(b'+CMGL: ', b'').split(b',')
-                pdu = parts[(n*2)+1]
-                message = self.parse_message(index, status, alpha, length, pdu)
-                messages.append(message)
-            except:
-                self.logger.error(f'Failed to parse message: {parts[(n*2):(n*2)+1]}', exc_info=True)
+            messages = []
+            for n in range(len(response)//2):
+                try:
+                    message_info = response[n*2]
+                    index, status, alpha, length = message_info.replace(b'+CMGL: ', b'').split(b',')
+                    pdu = response[(n*2)+1]
+                    message = self.parse_message(index, status, alpha, length, pdu)
+                    messages.append(message)
+                except:
+                    self.logger.error(f'Failed to parse message: {response[(n*2):(n*2)+1]}', exc_info=True)
 
-        return messages
+            return messages
+        except Exception as e:
+            self.logger.error('Failed to list messages', exc_info=True)
+            raise ReadMessageError from e
 
     async def delete_message(self, index: int):
         command = ExtendedCommand(b'AT+CMGD').write(str(index).encode())

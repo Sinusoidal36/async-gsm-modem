@@ -6,7 +6,7 @@ import serial_asyncio
 from typing import Type, Callable, List, Tuple
 from .command import Command
 from .response import Response, UnsolicitedResultCode
-from .exceptions import CommandError
+from .exceptions import CommandError, CommandFailed, ModemConnectionError
 import logging
 import re
 
@@ -45,7 +45,11 @@ class ATModem:
             baudrate=self.baud_rate
         )
         self.at_logger.debug(f'Connected to {self.device}')
-        await self.initialize()
+        try:
+            await self.initialize()
+        except Exception as e:
+            self.at_logger.error('Failed to connect to modem', exc_info=True)
+            raise ModemConnectionError from e
         self.start_read_loop()
         self.start_urc_handler_loop()
 
@@ -92,22 +96,20 @@ class ATModem:
                 response = await self.read_response(expected_response=expected_response, terminator=response_terminator, timeout=timeout)
                 self.at_logger.debug(response)
                 return response
-        except TimeoutError:
-            self.at_logger.error(f'Response timed out sending: {command}')
-        except CancelledError:
-            self.at_logger.debug(f'Command cancelled: {command}', exc_info=True)
-            raise
-        except CommandError as e:
-            self.at_logger.error(f'Command {command} received error response: {e.error}')
         except Exception as e:
             self.at_logger.error(f'Failed to send command: {command}', exc_info=True)
+            raise CommandFailed from e
 
     async def read_response(self, expected_response: bytes = None, seperator: bytes = None, terminator: bytes = None, timeout: int = 5) -> Response:
         seperator = seperator if seperator else self.RESP_SEPERATOR
         terminator = terminator if terminator else self.RESP_TERMINATOR
         response_chunks = []
         while True:
-            response_chunk = await self.read(seperator, timeout)
+            try:
+                response_chunk = await self.read(seperator, timeout)
+            except:
+                self.at_logger.debug(f'Read error, partial response: {response_chunks}')
+                raise
 
             error_code = next(filter(lambda error_code: response_chunk.startswith(error_code), self.error_codes), None)
             if error_code or response_chunk == self.ERROR_TERMINATOR:
@@ -143,8 +145,8 @@ class ATModem:
                     await self.urc_handler(self.urc_buffer.pop(0))
             except CancelledError:
                 raise
-            except:
-                self.at_logger.error(exc_info=True)
+            except Exception as e:
+                self.at_logger.error(e, exc_info=True)
             await asyncio.sleep(0.1)
 
     def start_urc_handler_loop(self) -> None:
