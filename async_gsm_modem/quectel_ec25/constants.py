@@ -52,5 +52,6 @@ UNSOLICITED_RESULT_CODES = [
     (b'+CPIN', 1),
     (b'+QIND', 1),
     (b'POWERED DOWN', 1),
-    (b'+CGEV', 1)
+    (b'+CGEV', 1),
+    (b'NO CARRIER', 1)
 ]
