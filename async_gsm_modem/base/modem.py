@@ -2,6 +2,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from asyncio.exceptions import IncompleteReadError, TimeoutError, CancelledError
 from datetime import datetime
+from serial.serialutil import SerialException
 import serial_asyncio
 from typing import Type, Callable, List, Tuple
 from .command import Command
@@ -96,6 +97,9 @@ class ATModem:
                 response = await self.read_response(expected_response=expected_response, terminator=response_terminator, timeout=timeout)
                 self.at_logger.debug(response)
                 return response
+        except SerialException as e:
+            self.at_logger.error(f'Failed to send command: {command}', exc_info=True)
+            raise ModemConnectionError from e
         except Exception as e:
             self.at_logger.error(f'Failed to send command: {command}', exc_info=True)
             raise CommandFailed from e
