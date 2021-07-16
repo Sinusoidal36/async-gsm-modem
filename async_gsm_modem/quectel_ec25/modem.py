@@ -39,11 +39,35 @@ class Modem(ATModem):
         response = await self.send_command(Command(b'AT+CIMI'))
         return response[0].decode()
 
+    async def iccid(self):
+        response = await self.send_command(Command(b'AT+QCCID'))
+        return response[0].decode().replace('+QCCID: ', '')
+
     async def number(self):
         response = await self.send_command(Command(b'AT+CNUM'))
         response = response[0].decode()
         number = response.split(',')[1].replace('"','')
         return number
+
+    async def network_info(self):
+        response = await self.send_command(Command(b'AT+QNWINFO'))
+        response = response[0].decode().replace('+QNWINFO: ','')
+        return response
+
+    async def network_registration(self):
+        response = await self.send_command(Command(b'AT+CREG?'))
+        response = response[0].decode().replace('+CREG: ','')
+        return response
+
+    async def registered_network(self):
+        response = await self.send_command(Command(b'AT+QSPN'))
+        response = response[0].decode().replace('+QSPN: ','')
+        return response
+
+    async def signal_quality(self):
+        response = await self.send_command(Command(b'AT+CSQ'))
+        response = response[0].decode().replace('+CSQ: ','')
+        return response
 
     def parse_message(self, index, status, alpha, length, pdu) -> SMS:
         data = SMSDeliver.decode(StringIO(pdu.decode()))
